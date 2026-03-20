@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goalfy-data-connect-sql
+  namespace: goalfy
+  labels:
+    app: goalfy-data-connect-sql
+    team: data-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: goalfy-data-connect-sql
+  template:
+    metadata:
+      labels:
+        app: goalfy-data-connect-sql
+    spec:
+      serviceAccountName: goalfy-data-connect-sql
+      containers:
+        - name: goalfy-data-connect-sql
+          image: gcr.io/goalfy/goalfy-data-connect-sql:latest
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          env:
+            # App
+            - name: APP_ENVIRONMENT
+              value: "production"
+            - name: APP_LOG_LEVEL
+              value: "info"
+            # Kafka
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: goalfy-kafka
+                  key: brokers
+            # Redis
+            - name: REDIS_ADDR
+              valueFrom:
+                secretKeyRef:
+                  name: goalfy-redis
+                  key: addr
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: goalfy-redis
+                  key: password
+            # Internal Postgres
+            - name: POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: goalfy-internal-postgres
+                  key: dsn
+            # Secret provider
+            - name: SECRET_PROVIDER
+              value: "env"
+            - name: SECRET_PREFIX
+              value: "SECRET_"
+          livenessProbe:
+            exec:
+              command: ["/goalfy-data-connect-sql", "-healthcheck"]
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command: ["/goalfy-data-connect-sql", "-healthcheck"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      terminationGracePeriodSeconds: 60
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: goalfy-data-connect-sql
+  namespace: goalfy
+  annotations:
+    iam.gke.io/gcp-service-account: goalfy-data-connect-sql@PROJECT_ID.iam.gserviceaccount.com
